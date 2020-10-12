@@ -13,12 +13,12 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <map>
 #include <string>
 
-#include "p2p/base/stun.h"
+#include "api/transport/stun.h"
 #include "rtc_base/message_handler.h"
-#include "rtc_base/message_queue.h"
 #include "rtc_base/third_party/sigslot/sigslot.h"
 #include "rtc_base/thread.h"
 
@@ -85,7 +85,7 @@ class StunRequestManager {
 
 // Represents an individual request to be sent.  The STUN message can either be
 // constructed beforehand or built on demand.
-class StunRequest : public rtc::MessageHandler {
+class StunRequest : public rtc::MessageHandlerAutoCleanup {
  public:
   StunRequest();
   explicit StunRequest(StunMessage* request);

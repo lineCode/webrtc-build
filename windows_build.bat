@@ -5,11 +5,11 @@ set "CLONE_DIR=c:\wc"
 set "TOOLS_DIR=%localappdata%\WMP\depot_tools"
 set "BATCH_DIR=%~dp0%"
 set "OLD_PATH=%PATH%"
-set "WEBRTC_BRANCH=m73"
+set "WEBRTC_BRANCH=4183"
 
 REM H264 support can only be compiled with clang, not MSVC. 
 REM Downside is source debugging in Visual Studio is not yet suported when using clang :(
-set "h264=0"
+set "h264=1"
 
 set DEPOT_TOOLS_WIN_TOOLCHAIN=0
 
@@ -72,7 +72,7 @@ cd /d %CLONE_DIR%
 if errorlevel 1 goto :error
 
 echo Synching webrtc source code...
-call gclient sync --with_branch_heads -f 
+call gclient sync --with_branch_heads -f -D
 if errorlevel 1 goto :error
  
 echo ----------------------------------------------------------------
@@ -95,9 +95,9 @@ if errorlevel 1 goto :error
 echo Generating debug build script, H264=%h264%...
 
 if %h264%==1 (
-    call gn gen windows_clang_debug_x64 --root="src" --args="target_cpu=\"x64\" is_debug=true use_rtti=true rtc_include_tests=false  symbol_level=0 proprietary_codecs=true use_openh264=true ffmpeg_branding=\"Chrome\""
+    call gn gen windows_clang_debug_x64 --root="src" --args="target_cpu=\"x64\" is_debug=true use_custom_libcxx=false treat_warnings_as_errors=false rtc_libvpx_build_vp9=true enable_iterator_debugging=true use_rtti=true rtc_include_tests=false  symbol_level=0 proprietary_codecs=true use_openh264=true ffmpeg_branding=\"Chrome\""
 ) else (
-    call gn gen windows_msvc_debug_x64 --root="src" --args="target_cpu=\"x64\" is_debug=true use_rtti=true rtc_include_tests=false  symbol_level=2 is_clang=false"
+    call gn gen windows_msvc_debug_x64 --root="src" --args="target_cpu=\"x64\" is_debug=true use_custom_libcxx=false use_rtti=true rtc_include_tests=false symbol_level=2 is_clang=false"
 )
 if errorlevel 1 goto :error
 
@@ -108,9 +108,9 @@ if errorlevel 1 goto :error
 
 echo Generating release build script, H264=%h264%...
 if %h264%==1 (
-    call gn gen windows_clang_release_x64 --root="src" --args="target_cpu=\"x64\" is_debug=false use_rtti=true rtc_include_tests=false  symbol_level=0 proprietary_codecs=true use_openh264=true ffmpeg_branding=\"Chrome\""
+    call gn gen windows_clang_release_x64 --root="src" --args="target_cpu=\"x64\" is_debug=false use_custom_libcxx=false treat_warnings_as_errors=false rtc_libvpx_build_vp9=true use_rtti=true rtc_include_tests=false  symbol_level=0 proprietary_codecs=true use_openh264=true ffmpeg_branding=\"Chrome\""
 ) else (
-    call gn gen windows_msvc_release_x64 --root="src" --args="target_cpu=\"x64\" is_debug=false use_rtti=true rtc_include_tests=false  symbol_level=0 is_clang=false"
+    call gn gen windows_msvc_release_x64 --root="src" --args="target_cpu=\"x64\" is_debug=false use_custom_libcxx=false use_rtti=true rtc_include_tests=false symbol_level=0 is_clang=false"
 )
 if errorlevel 1 goto :error
 

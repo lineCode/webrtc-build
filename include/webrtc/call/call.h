@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "api/adaptation/resource.h"
 #include "api/media_types.h"
 #include "call/audio_receive_stream.h"
 #include "call/audio_send_stream.h"
@@ -24,12 +25,49 @@
 #include "call/rtp_transport_controller_send_interface.h"
 #include "call/video_receive_stream.h"
 #include "call/video_send_stream.h"
-#include "rtc_base/bitrate_allocation_strategy.h"
+#include "modules/utility/include/process_thread.h"
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/network/sent_packet.h"
 #include "rtc_base/network_route.h"
+#include "rtc_base/ref_count.h"
 
 namespace webrtc {
+
+// A restricted way to share the module process thread across multiple instances
+// of Call that are constructed on the same worker thread (which is what the
+// peer connection factory guarantees).
+// SharedModuleThread supports a callback that is issued when only one reference
+// remains, which is used to indicate to the original owner that the thread may
+// be discarded.
+class SharedModuleThread : public rtc::RefCountInterface {
+ protected:
+  SharedModuleThread(std::unique_ptr<ProcessThread> process_thread,
+                     std::function<void()> on_one_ref_remaining);
+  friend class rtc::scoped_refptr<SharedModuleThread>;
+  ~SharedModuleThread() override;
+
+ public:
+  // Instantiates a default implementation of ProcessThread.
+  static rtc::scoped_refptr<SharedModuleThread> Create(
+      const char* name,
+      std::function<void()> on_one_ref_remaining);
+
+  // Allows injection of an externally created process thread.
+  static rtc::scoped_refptr<SharedModuleThread> Create(
+      std::unique_ptr<ProcessThread> process_thread,
+      std::function<void()> on_one_ref_remaining);
+
+  void EnsureStarted();
+
+  ProcessThread* process_thread();
+
+ private:
+  void AddRef() const override;
+  rtc::RefCountReleaseStatus Release() const override;
+
+  class Impl;
+  mutable std::unique_ptr<Impl> impl_;
+};
 
 // A Call instance can contain several send and/or receive streams. All streams
 // are assumed to have the same remote endpoint and will share bitrate estimates
@@ -49,18 +87,15 @@ class Call {
   };
 
   static Call* Create(const Call::Config& config);
-
-  // Allows mocking |transport_send| for testing.
-  static Call* Create(
-      const Call::Config& config,
-      std::unique_ptr<RtpTransportControllerSendInterface> transport_send);
+  static Call* Create(const Call::Config& config,
+                      rtc::scoped_refptr<SharedModuleThread> call_thread);
+  static Call* Create(const Call::Config& config,
+                      Clock* clock,
+                      rtc::scoped_refptr<SharedModuleThread> call_thread,
+                      std::unique_ptr<ProcessThread> pacer_thread);
 
   virtual AudioSendStream* CreateAudioSendStream(
       const AudioSendStream::Config& config) = 0;
-
-  // Gets called when media transport is created or removed.
-  virtual void MediaTransportChange(
-      MediaTransportInterface* media_transport_interface) = 0;
 
   virtual void DestroyAudioSendStream(AudioSendStream* send_stream) = 0;
 
@@ -91,6 +126,11 @@ class Call {
   virtual void DestroyFlexfecReceiveStream(
       FlexfecReceiveStream* receive_stream) = 0;
 
+  // When a resource is overused, the Call will try to reduce the load on the
+  // sysem, for example by reducing the resolution or frame rate of encoded
+  // streams.
+  virtual void AddAdaptationResource(rtc::scoped_refptr<Resource> resource) = 0;
+
   // All received RTP and RTCP packets for the call should be inserted to this
   // PacketReceiver. The PacketReceiver pointer is valid as long as the
   // Call instance exists.
@@ -107,10 +147,6 @@ class Call {
   // pacing delay, etc.
   virtual Stats GetStats() const = 0;
 
-  virtual void SetBitrateAllocationStrategy(
-      std::unique_ptr<rtc::BitrateAllocationStrategy>
-          bitrate_allocation_strategy) = 0;
-
   // TODO(skvlad): When the unbundled case with multiple streams for the same
   // media type going over different networks is supported, track the state
   // for each stream separately. Right now it's global per media type.
@@ -121,6 +157,9 @@ class Call {
       int transport_overhead_per_packet) = 0;
 
   virtual void OnSentPacket(const rtc::SentPacket& sent_packet) = 0;
+
+  virtual void SetClientBitratePreferences(
+      const BitrateSettings& preferences) = 0;
 
   virtual ~Call() {}
 };

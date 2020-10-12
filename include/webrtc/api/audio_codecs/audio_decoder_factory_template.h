@@ -15,8 +15,8 @@
 #include <vector>
 
 #include "api/audio_codecs/audio_decoder_factory.h"
+#include "api/scoped_refptr.h"
 #include "rtc_base/ref_counted_object.h"
-#include "rtc_base/scoped_ref_ptr.h"
 
 namespace webrtc {
 
@@ -90,7 +90,7 @@ class AudioDecoderFactoryT : public AudioDecoderFactory {
 // be a struct with the following static member functions:
 //
 //   // Converts |audio_format| to a ConfigType instance. Returns an empty
-//   // optional if |audio_format| doesn't correctly specify an decoder of our
+//   // optional if |audio_format| doesn't correctly specify a decoder of our
 //   // type.
 //   absl::optional<ConfigType> SdpToConfig(const SdpAudioFormat& audio_format);
 //

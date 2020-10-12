@@ -44,6 +44,9 @@ struct RtpDemuxerCriteria {
 
   // Will match packets with any of these payload types.
   std::set<uint8_t> payload_types;
+
+  // Return string representation of demux criteria to facilitate logging
+  std::string ToString() const;
 };
 
 // This class represents the RTP demuxing, for a single RTP session (i.e., one
@@ -87,6 +90,10 @@ class RtpDemuxer {
   // memory overuse attacks due to a malicious peer sending many packets with
   // different SSRCs.
   static constexpr int kMaxSsrcBindings = 1000;
+
+  // Returns a string that contains all the attributes of the given packet
+  // relevant for demuxing.
+  static std::string DescribePacket(const RtpPacketReceived& packet);
 
   RtpDemuxer();
   ~RtpDemuxer();

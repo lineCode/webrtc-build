@@ -13,56 +13,49 @@
 
 #include <utility>
 
+#include "api/function_view.h"
 #include "rtc_base/constructor_magic.h"
+#include "rtc_base/system/rtc_export.h"
 
 namespace rtc {
 
 struct Message;
 
-// Messages get dispatched to a MessageHandler
-
-class MessageHandler {
+// MessageQueue/Thread Messages get dispatched to a MessageHandler via the
+// |OnMessage()| callback method.
+//
+// Note: Besides being an interface, the class can perform automatic cleanup
+// in the destructor.
+// TODO(bugs.webrtc.org/11908): The |auto_cleanup| parameter and associated
+// logic is a temporary step while changing the MessageHandler class to be
+// a pure virtual interface. The automatic cleanup step involves a number of
+// complex operations and as part of this interface, can easily go by unnoticed
+// and bundled into situations where it's not needed.
+class RTC_EXPORT MessageHandler {
  public:
   virtual ~MessageHandler();
   virtual void OnMessage(Message* msg) = 0;
 
  protected:
-  MessageHandler() {}
+  // TODO(bugs.webrtc.org/11908): The |auto_cleanup| parameter needs to have a
+  // backwards compatible default value while external code is being updated.
+  explicit MessageHandler(bool auto_cleanup = true)
+      : auto_cleanup_(auto_cleanup) {}
 
  private:
   RTC_DISALLOW_COPY_AND_ASSIGN(MessageHandler);
+  const bool auto_cleanup_;
 };
 
-// Helper class to facilitate executing a functor on a thread.
-template <class ReturnT, class FunctorT>
-class FunctorMessageHandler : public MessageHandler {
+class RTC_EXPORT MessageHandlerAutoCleanup : public MessageHandler {
  public:
-  explicit FunctorMessageHandler(FunctorT&& functor)
-      : functor_(std::forward<FunctorT>(functor)) {}
-  virtual void OnMessage(Message* msg) { result_ = functor_(); }
-  const ReturnT& result() const { return result_; }
+  ~MessageHandlerAutoCleanup() override;
 
-  // Returns moved result. Should not call result() or MoveResult() again
-  // after this.
-  ReturnT MoveResult() { return std::move(result_); }
+ protected:
+  MessageHandlerAutoCleanup() : MessageHandler(true) {}
 
  private:
-  FunctorT functor_;
-  ReturnT result_;
-};
-
-// Specialization for ReturnT of void.
-template <class FunctorT>
-class FunctorMessageHandler<void, FunctorT> : public MessageHandler {
- public:
-  explicit FunctorMessageHandler(FunctorT&& functor)
-      : functor_(std::forward<FunctorT>(functor)) {}
-  virtual void OnMessage(Message* msg) { functor_(); }
-  void result() const {}
-  void MoveResult() {}
-
- private:
-  FunctorT functor_;
+  RTC_DISALLOW_COPY_AND_ASSIGN(MessageHandlerAutoCleanup);
 };
 
 }  // namespace rtc
